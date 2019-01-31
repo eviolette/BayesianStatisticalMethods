@@ -10,16 +10,94 @@ knitr::opts_chunk$set(echo = F,
                       include = F,
                       warning = F,
                       cache = T)
+
+library(kableExtra)
 ```
 
 # 2)  Hoff Exercise 2.1
-**Marginal and conditional probability: The social mobility data from Section 2.5 gives a joint probability distribution on (Y_1, Y_2)= (father’s occupation, son’s occupation). Using this joint distribution, calculate the following distributions: **
+**Marginal and conditional probability: The social mobility data from Section 2.5 gives a joint probability distribution on $(Y_1, Y_2)$= (father’s occupation, son’s occupation). Using this joint distribution, calculate the following distributions: **
+
+```{r}
+#farms, operatives, craftsmen, sales, professional
+social_mob <- t(matrix(c(0.018, 0.035, 0.031, 0.008, 0.018, 
+          0.002, 0.112, 0.064, 0.032, 0.069,
+          0.001, 0.066, 0.094, 0.032, 0.084,
+          0.001, 0.018, 0.019, 0.010, 0.051,
+          0.001, 0.029, 0.032, 0.043, 0.130), ncol = 5))
+```
+
 
 ## 2.a)  the marginal probability distribution of a father’s occupation
-## 2.b)  the marginal probability distribution of a son’s occupation
-## 2.c)  the conditional distribution of a son’s occupation, given that the father is a farmer
-## 2.d)  the conditional distribution of a father’s occupation, given that the son is a farmer.
 
+$Pr(Y_1 = y_1) = Pr(Y_1 = y_1, Y_2 = y_2)$, so the marginal probability distribution of a father’s occupation is the sums of the rows of the data, which represents the son's occupation probabilities added up.
+
+```{r include=T}
+father.occ <- t(rowSums(social_mob))
+rownames(father.occ) <- c("$Pr(y_1)$")
+colnames(father.occ) <- c("$Y_1 = farms$", "$Y_1 =  operatives$", "$Y_1 = craftsmen$", "$Y_1 = sales$", "$Y_1 = professional$")
+
+father.occ %>% kable(row.names = T, escape = F)
+```
+
+
+## 2.b)  the marginal probability distribution of a son’s occupation
+
+$Pr(Y_2 = y_2) = Pr(Y_1 = y_1, Y_2 = y_2)$, so the marginal probability distribution of a sons’s occupation is the sums of the columns of the data, which represents the father's occupation probabilities added up.
+
+```{r, include = T}
+son.occ <- t(colSums(social_mob))
+rownames(son.occ) <- c("$Pr(y_2)$")
+colnames(son.occ) <- c("$Y_2 = farms$", "$Y_2 =  operatives$", "$Y_2 = craftsmen$", "$Y_2 = sales$", "$Y_2 = professional$")
+
+son.occ %>% kable(row.names = T, escape = F)
+```
+
+
+## 2.c)  the conditional distribution of a son’s occupation, given that the father is a farmer.
+
+From Bayes' Theorem:
+
+$$Pr(Y_2 = y_2 \mid Y_1 = \text{farmer}) = \frac{Pr(Y_2 = y_2, Y_1 = \text{farmer})}{Pr(Y_1 = \text{farmer})}$$
+
+We know from 2.a) $Pr(Y_1 = \text{farmer}) = .11$:
+
+$$Pr(Y_2 = y_2 \mid Y_1 = \text{farmer}) = \frac{Pr(Y_2 = y_2, Y_1 = \text{farmer})}{.11}$$
+
+For $Pr(Y_2 = y_2, Y_1 = \text{farmer})$, simply select the row from the social mobility data where father's occupation = farm.
+
+$$Pr(Y_2 = y_2 \mid Y_1 = \text{farmer}) = \frac{0.018, 0.035, 0.031, 0.008, 0.018}{.11}$$
+
+```{r, include = T}
+son_occ_given_father_farmer <- t(matrix(round(social_mob[1,]/.11, digits = 3)))
+rownames(son_occ_given_father_farmer) <- c("$Pr(y_2 | Y_1 = farmer)$")
+colnames(son_occ_given_father_farmer) <- c("$Y_2 = farms$", "$Y_2 =  operatives$", "$Y_2 = craftsmen$", "$Y_2 = sales$", "$Y_2 = professional$")
+
+son_occ_given_father_farmer %>% kable(row.names = T, escape = F)
+```
+
+
+## 2.d)  the conditional distribution of a father’s occupation, given that the son is a farmer. 
+
+From Bayes' Theorem:
+
+$$Pr(Y_1 = y_1 \mid Y_2 = \text{farmer}) = \frac{Pr(Y_1 = y_1, Y_2 = \text{farmer})}{Pr(Y_2 = \text{farmer})}$$
+
+We know from 2.b) $Pr(Y_2 = \text{farmer}) = .023$:
+
+$$Pr(Y_1 = y_1 \mid Y_2 = \text{farmer}) = \frac{Pr(Y_1 = y_1, Y_2 = \text{farmer})}{.023}$$
+
+For $Pr(Y_1 = y_1, Y_2 = \text{farmer})$, simply select the column from the social mobility data where son's occupation = farm.
+
+$$Pr(Y_1 = y_1 \mid Y_2 = \text{farmer}) = \frac{0.018, 0.002, 0.001, 0.001, 0.001}{.11}$$
+
+
+```{r, include = T}
+father_occ_given_son_farmer <- t(matrix(round(social_mob[,1]/.023, digits = 3)))
+rownames(father_occ_given_son_farmer) <- c("$Pr(y_1 | Y_2 = farmer)$")
+colnames(father_occ_given_son_farmer) <- c("$Y_1 = farms$", "$Y_1 =  operatives$", "$Y_1 = craftsmen$", "$Y_1 = sales$", "$Y_1 = professional$")
+
+father_occ_given_son_farmer %>% kable(row.names = T, escape = F)
+```
 
 
 # 3)  Hoff Exercise 2.3
