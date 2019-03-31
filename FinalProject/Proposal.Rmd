@@ -1,0 +1,20 @@
+---
+title: "Bayesian Final Project Proposal"
+author: "Joe Stoica, Ethan Violette, Qinzhe Wang"
+date: "3/31/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# What is the topic of the project?
+
+# What are the main issues or problems to be addressed?
+
+# What data will be used, including the variables measured? 
+
+# What are your initial thoughts on appropriate models/distributions?
+
+# What questions and/or concerns do you have about the project?
