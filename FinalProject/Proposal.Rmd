@@ -11,9 +11,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # What is the topic of the project?
 
+The topic is predicting political orientation from two different regions of the brain. The goal of the project is to see if isolating the amygdala and anterior cingulate cortex results in measurable differences in an individual's tendency towards conservatism or liberalism.
+
+The amygdala is a roughly almond-shaped mass of gray matter inside each cerebral hemisphere, involved with the experiencing of emotions The Anterior Cingulate Cortex is a part of the brain located at the middle of the frontal lobe. It is located at the front of the corpus callosum which connects the left and right hemispheres of the brain. It is responsible for many psychological and physiological functions, including attention allocation, reward anticipation, decision-making, ethics and morality, impulse control (e.g. performance monitoring and error detection), and emotion. 
+
 # What are the main issues or problems to be addressed?
 
 # What data will be used, including the variables measured? 
+
+The data set n90 pol.csv, taken from Shalizi's Advanced Data Analysis From an Elementary Point of View, contains information on 90 university students who participated in a psychological experiment designed to look for relationships between the size of different regions of the brain and political views. The variables amygdala and acc indicate the volume of two particular brain regions known to be involved in emotions and decision-making, the amygdala and the anterior cingulate cortex; more exactly, these are residuals from the predicted volume, after adjusting for height, sex, and similar anatomical variables. The variable orientation gives the subjects’ locations on a five-point scale from 1 (very conservative) to 5 (very liberal). orientation is an ordinal but not a metric variable, so scores of 1 and 2 are not necessarily as far apart as scores of 2 and 3. As of right now, we're planning on encoding 1-2 as "conservative" and 3-5 as "liberal" to perform logistic regression on the dara. 
 
 # What are your initial thoughts on appropriate models/distributions?
 
