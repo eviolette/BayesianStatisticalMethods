@@ -1,0 +1,53 @@
+---
+title: "Orientation"
+author: "Ethan Violette"
+date: "4/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+
+library(ggplot2)
+library(rstanarm)
+library(tidyverse)
+```
+
+# Data Import and Formatting
+
+```{r}
+orientation.df <- read.csv("n90_pol.csv")
+
+orientation.df$orientation <- as.factor(ifelse(orientation.df$orientation < 3, "conservative", "liberal"))
+```
+
+### Preparing the inputs
+
+```{r}
+x <- model.matrix(orientation ~ . -1, data = orientation.df)
+y <- orientation.df$orientation
+```
+
+
+We'll use the stan_glm function from the rstanarm package to fit a logistic regression model from the Bayesian perspective. To do so, we need specified priors for the predictors **amygdala** and **acc**. A Student t prior with p-1 = 1 degree of freedom and a scale of 2.5 is a good prior when we expect the model coefficients to be close to zero, but accept the possibility of large values. 
+
+**stan_glm** effectively mirrors the generalized linear model function **glm** in R, with extra parameters to specific our aforementioned priors. We'll also set a seed for reproducibility, and add a random effect to account for individual variance.
+
+```{r}
+t_prior <- student_t(df = 7, location = 0, scale = 2.5)
+
+post1 <- stan_glm(orientation ~ amygdala + acc, 
+                  data = orientation.df, 
+                  family = "binomial", 
+                  prior = t_prior, 
+                  prior_intercept = t_prior,
+                  QR = TRUE,
+                  seed = 1)
+```
+
+```{r}
+round(coef(post1), 2)
+round(posterior_interval(post1, prob = .9), 2)
+```
+
