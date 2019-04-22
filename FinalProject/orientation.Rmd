@@ -6,18 +6,27 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+knitr::opts_chunk$set(echo = FALSE,
+                      cache = FALSE)
 
 library(ggplot2)
 library(rstanarm)
 library(tidyverse)
+library(kableExtra)
+library(loo)
+library(caret)
+library(splines)
+library(MASS)
+set.seed(1)
 ```
 
-# TODO: Introduction
+# Introduction
+
+The amygdala is a roughly almond-shaped mass of gray matter inside each cerebral hemisphere, involved with the experiencing of emotions. The Anterior Cingulate Cortex is a part of the brain located at the middle of the frontal lobe. It is located at the front of the corpus callosum which connects the left and right hemispheres of the brain, and is responsible for many psychological and physiological functions, including attention allocation, reward anticipation, decision-making, ethics and morality, impulse control (e.g. performance monitoring and error detection), and emotion. Our data anlysis intends to investigate correlates between the grey matter volume of these two regions of the brain, and political orientation. 
+
+The data set n90 pol.csv, taken from Shalizi's *Advanced Data Analysis From an Elementary Point of View*, contains information on 90 healthy university students who participated in a psychological experiment designed to look for relationships between the size of different regions of the brain and political views. The variables amygdala and acc indicate the volumes, in astronomical unites (au) of the grey matter of the two particular brain regions. The variable orientation gives the subjects’ locations on a five-point scale from 1 (very conservative) to 5 (very liberal). orientation is an ordinal but not a metric variable, so scores of 1 and 2 are not necessarily as far apart as scores of 2 and 3. We decided on encoding 1-3 as "conservative" and 4-5 as "liberal" to perform logistic regression on the data. Note that no students responded with a 1, or "very conservative," hence our decision to make the aforementioned factorization of the variable. 
 
 
-# Data Import and Formatting
 
 ```{r}
 orientation.df <- read.csv("n90_pol.csv")
@@ -30,19 +39,31 @@ orientation.df$orientation <- as.factor(ifelse(orientation.df$orientation < 4, "
 ```{r}
 orientation.df %>% 
   ggplot() +
+  geom_bar(aes(x = orientation, fill = orientation), stat = "count") +
+  theme(legend.position = "none") +
+  labs(title = "Observations by Political Orientation")
+```
+
+
+There are `r nrow(orientation.df[orientation.df$orientation == "conservative",])` young adults who identify as "conservative"  and `r nrow(orientation.df[orientation.df$orientation != "conservative",])` young adults who identify as "liberal" according to our specification.
+
+
+```{r}
+orientation.df %>% 
+  ggplot() +
   geom_boxplot(aes(y = amygdala, x = orientation, fill = orientation)) +
-  scale_fill_manual(values = c("red", "blue")) +
   theme(legend.position = "none") +
   labs(title = "Amygdala Volume (au) v. Political Orientation", y = "Amygdala volume (au)")
 ```
 
+
 It appears that conservatives have higher amygdala volumes than their liberal counterparts, though this difference is small and could be attributed to variance.
+
 
 ```{r}
 orientation.df %>% 
   ggplot() +
   geom_boxplot(aes(y = acc, x = orientation, fill = orientation)) +
-  scale_fill_manual(values = c("red", "blue")) +
   theme(legend.position = "none") +
   labs(title = "Anterior Cingulate Cortex Volume (au) v. Political Orientation", y = "Anterior Cingulate Cortex Volume (au)")
 ```
@@ -118,10 +139,13 @@ $$f\left(\alpha,\boldsymbol{\beta} | \mathbf{y},\mathbf{X}\right) \propto
   g^{-1}\left(\eta_i\right)^{y_i} 
   \left(1 - g^{-1}\left(\eta_i\right)\right)^{n_i-y_i}}.$$
 
-**stan_glm** effectively mirrors the generalized linear model function **glm** in R, with extra parameters to specific our aforementioned priors.  **stan_glm** draws from the posterior distribution for each coefficient estimate using Markov Chain Monte Carlo (MCMC) simulation. We'll also set a seed for reproducibility, and add a random effect to account for individual variance. The input formula is **orientation ~ amygdala + acc**.
+**stan_glm** effectively mirrors the generalized linear model function **glm** in R, with extra parameters to specificy our aforementioned priors.  **stan_glm** draws from the posterior distribution for each coefficient estimate using Markov Chain Monte Carlo (MCMC) simulation. We'll also set a seed for reproducibility, and add a random effect to account for individual variance. The input formula is **orientation ~ amygdala*10 + acc*10**, to get the odds-ratios for a .1 increase in volume of amygdala or ACC.
 
-```{r}
+```{r, include = F}
 t_prior <- student_t(df = 7, location = 0, scale = 2.5)
+
+orientation.df$acc <- orientation.df$acc * 10
+orientation.df$amygdala <- orientation.df$amygdala * 10
 
 post1 <- stan_glm(orientation ~ amygdala + acc, 
                   data = orientation.df, 
@@ -132,8 +156,110 @@ post1 <- stan_glm(orientation ~ amygdala + acc,
                   seed = 1)
 ```
 
+All 4 Markov Chains converged, with 2000 samples from the posterior taken by each chain. The posterior estimates for the intercept, amygdala volume, and ACC volume coefficients are below, in odds-ratio format:
+
 ```{r}
-round(coef(post1), 2)
-round(posterior_interval(post1, prob = .9), 2)
+out.coefs <- round(exp(coef(post1)), 2)
+
+out.coefs %>% 
+  kable(col.names = c("Coefficient Estimate")) %>% 
+  kable_styling()
 ```
 
+
+We can interpret the coefficients of the model as follows:
+
+- For each .1 increase in amygdala gray matter, we would expect the odds of the person of being a liberal to decrease by a factor of `r round(1/out.coefs[2], 2)`.
+- For each .1 increase in ACC gray matter, we would expect the odds of the person being a liberal to increase by a factor of `r out.coefs[3]`.
+
+And here are the posterior 95\% probability intervals for the aforementioned coefficient values:
+
+
+```{r}
+ci.95 <- round(exp(posterior_interval(post1, prob = .95)), 2)
+
+ci.95 %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+
+Unlike frequentist confidence intervals — which are not interpretable in terms of post-data probabilities — the Bayesian uncertainty interval indicates we believe after seeing the data that there is a 0.95 probability that $\beta_{amygdala}$ is between `r ci.95[2,1]` and `r ci.95[2,2]`. There is a 0.95 probability that $\beta_{ACC}$ is between `r ci.95[3,1]` and `r ci.95[3,2]`. We can visualize the distributions of the posterior coefficient estimates:
+
+
+```{r}
+pplot<-plot(post1, "areas", prob = 0.95, prob_outer = 1)
+pplot+ geom_vline(xintercept = 0)
+```
+
+Note these distributions are on the log-dds scale; affirming our posterior beliefs that amygdala volume is associated more with conservatism, whereas ACC volume is more represented of liberalism. The intercept indicates that when both ACC and amygdala volume are 0, then guesses are biased towards liberal. 
+
+# Model Performance Diagnostics
+
+rstanarm supports the loo package, which implements fast Pareto smoothed leave-one-out cross-validation (PSIS-LOO) to compute expected log predictive density (elpd): 
+
+```{r}
+loo1 <- loo(post1, save_psis = TRUE)
+loo1
+```
+
+The PSIS-LOO result is reliable, as all Pareto k estimates are small with k values of less than 0.5. 
+
+We can compare our model with a model that doesn't use any predictor variables using the **compare_models** function of **rstanarm**, which takes in the PSIS-LOO of the empty model and compares it to a 2nd model, in this case our full model.
+
+```{r include = F}
+post0 <- update(post1, formula = orientation ~ 1, QR = FALSE)
+(loo0 <- loo(post0))
+```
+```{r}
+rstanarm::compare_models(loo0,loo1)
+```
+
+
+PSIS-LOO favors our full model with the amygdala and ACC covariates.
+
+
+```{r}
+# Predicted probabilities
+linpred <- posterior_linpred(post1)
+preds <- posterior_linpred(post1, transform=TRUE)
+pred <- colMeans(preds)
+pr <- as.integer(pred >= 0.5)
+   
+# posterior classification accuracy
+post.class.acc <- round(mean(xor(pr,as.integer(y==0))),2)
+
+# LOO predictive probabilities
+ploo=E_loo(preds, loo1$psis_object, type="mean", log_ratios = -log_lik(post1))$value
+# LOO classification accuracy
+post.class.acc.loo <- round(mean(xor(ploo>0.5,as.integer(y==0))),2)
+
+qplot(pred, ploo)
+```
+
+Using the predicted probabilities from our posterior distributions, the posterior classification accuracy on the full dataset is `r post.class.acc * 100`%. We can compare this classification accuracy to the accuracy obtained through PSIS leave-one-out cross-validation, `r post.class.acc.loo * 100`%. 
+
+An inherent weakness in our model is showcased with the following calibration plot of observed versus predicted values, smoothed via a spline fit:
+
+```{r}
+ggplot(data = data.frame(pred=pred,loopred=ploo,y=as.numeric(y)-1), aes(x=loopred, y=y)) +
+  stat_smooth(method='gam', formula = y ~ s(x, k=20), method.args = list(family = "binomial")) +
+  geom_abline(linetype = 'dashed') +
+  labs(x = "Predicted (LOO)", y = "Observed") +
+  geom_jitter(aes(x=loopred, y=y*0.96+0.02), height=0.02, width=0, alpha=0.3) +
+  scale_y_continuous(breaks=seq(0,1,by=0.1), limits=c(0,1)) +
+  xlim(c(0,1))
+```
+
+There is a lack of probabilities generated for values where tendency towards conservative is very likely (Pr(Liberal | data) < .3), as well as values for high tendency towards liberal (Pr(Liberal | data) > .80). This indicates that our two predictor variables are, though statistically signficant, are not very powerful in predicting political orientation, especially with high degrees of certainty. 
+
+# Conclusion
+TODO
+
+# References
+
+Data is taken from Shalizi's unreleased *Advanced Data Analysis from an Elementary Point of View*, which references a 2011 study conducted by Kanai et. al.
+
+Kanai, Ryota et al. “Political orientations are correlated with brain structure in young adults.” Current biology : CB vol. 21,8 (2011): 677-80. doi:10.1016/j.cub.2011.03.017
+
+Shalizi, Cosma Rohilla. 2013. “Advanced Data Analysis from an Elementary Point of View.” URL: http://www.stat.cmu.edu/~cshalizi/ADAfaEPoV/.
