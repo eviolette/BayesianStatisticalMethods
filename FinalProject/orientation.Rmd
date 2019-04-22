@@ -1,6 +1,6 @@
 ---
-title: "Orientation"
-author: "Ethan Violette"
+title: "Brain Structure Correlates of Political Orientation in Healthy Young Adults"
+author: "Joseph Stoica, Ethan Violette, Qinzhe Wang"
 date: "4/11/2019"
 output: html_document
 ---
@@ -14,25 +14,111 @@ library(rstanarm)
 library(tidyverse)
 ```
 
+# TODO: Introduction
+
+
 # Data Import and Formatting
 
 ```{r}
 orientation.df <- read.csv("n90_pol.csv")
 
-orientation.df$orientation <- as.factor(ifelse(orientation.df$orientation < 3, "conservative", "liberal"))
+orientation.df$orientation <- as.factor(ifelse(orientation.df$orientation < 4, "conservative", "liberal"))
 ```
 
-### Preparing the inputs
+# Exploratory Data Analysis
+
+```{r}
+orientation.df %>% 
+  ggplot() +
+  geom_boxplot(aes(y = amygdala, x = orientation, fill = orientation)) +
+  scale_fill_manual(values = c("red", "blue")) +
+  theme(legend.position = "none") +
+  labs(title = "Amygdala Volume (au) v. Political Orientation", y = "Amygdala volume (au)")
+```
+
+It appears that conservatives have higher amygdala volumes than their liberal counterparts, though this difference is small and could be attributed to variance.
+
+```{r}
+orientation.df %>% 
+  ggplot() +
+  geom_boxplot(aes(y = acc, x = orientation, fill = orientation)) +
+  scale_fill_manual(values = c("red", "blue")) +
+  theme(legend.position = "none") +
+  labs(title = "Anterior Cingulate Cortex Volume (au) v. Political Orientation", y = "Anterior Cingulate Cortex Volume (au)")
+```
+
+It seems that conservatives have lower amygdala volumes than the liberals, though this difference is also somewhat small and could be attributed to variance.
+
 
 ```{r}
 x <- model.matrix(orientation ~ . -1, data = orientation.df)
 y <- orientation.df$orientation
 ```
 
+# Model Specification 
 
-We'll use the stan_glm function from the rstanarm package to fit a logistic regression model from the Bayesian perspective. To do so, we need specified priors for the predictors **amygdala** and **acc**. A Student t prior with p-1 = 1 degree of freedom and a scale of 2.5 is a good prior when we expect the model coefficients to be close to zero, but accept the possibility of large values. 
+### Priors
 
-**stan_glm** effectively mirrors the generalized linear model function **glm** in R, with extra parameters to specific our aforementioned priors. We'll also set a seed for reproducibility, and add a random effect to account for individual variance.
+We'll use the stan_glm function from the rstanarm package to fit a logistic regression model from the Bayesian perspective. To do so, we need specified priors for the predictors **amygdala** and **acc**. A Student t prior with p-1 = 1 degree of freedom and a scale of 2.5 is a good prior when we expect the model coefficients to be close to zero, but can accept the possibility of large values. A student-t prior exhibits less kurtosis and fatter tails than the normal distribution (but not as much as, say, a Cauchy distribution) 
+
+```{r}
+# Visually compare normal, student_t, cauchy, laplace, and product_normal
+compare_priors <- function(scale = 2.5, df_t = 7, xlim = c(-10, 10)) {
+  dt_loc_scale <- function(x, df, location, scale) { 
+    1/scale * dt((x - location)/scale, df)  
+  }
+  dlaplace <- function(x, location, scale) {
+    0.5 / scale * exp(-abs(x - location) / scale)
+  }
+  dproduct_normal <- function(x, scale) {
+    besselK(abs(x) / scale ^ 2, nu = 0) / (scale ^ 2 * pi)
+  }
+  stat_dist <- function(dist, ...) {
+    ggplot2::stat_function(ggplot2::aes_(color = dist), ...)
+  }
+  ggplot2::ggplot(data.frame(x = xlim), ggplot2::aes(x)) + 
+    stat_dist("normal", size = .75, fun = dnorm, 
+              args = list(mean = 0, sd = scale)) +
+    stat_dist("student_t", size = .75, fun = dt_loc_scale, 
+              args = list(df = df_t, location = 0, scale = scale)) +
+    stat_dist("cauchy", size = .75, linetype = 2, fun = dcauchy, 
+              args = list(location = 0, scale = scale)) +
+    labs(title = "Comparing Priors")
+}
+
+compare_priors()
+```
+
+### Likelihood
+
+By specfying the family argument as "binomial", we are instructing stan_glm to use the binomial likelihood function, with pmf
+
+$$\binom{n}{y} \pi^{y} (1 - \pi)^{n - y}$$
+
+where n is the number of trials, $\pi = g^{-1}(\eta)$ is the probability of a success and $\eta = \alpha + \mathbf{x}^\top \boldsymbol{\beta}$ is a linear predictor.
+
+Because $\pi$ is a probability, for a binomial model the link function g maps between the unit interval (the support of $\pi$) and the set of all real numbers $\mathbb{R}$. When applied to a linear predictor $\eta$ with values in $\mathbb{R}$, the inverse link function $g^{-1}(\eta)$ therefore returns a valid probability between 0 and 1.
+
+The most common link function used for binomial GLMs is the logit function. With the logit link function $g(x) = \ln{\left(\frac{x}{1-x}\right)}$, the likelihood for a single observation becomes 
+
+$$\binom{n}{y}\left(\text{logit}^{-1}(\eta)\right)^y 
+\left(1 - \text{logit}^{-1}(\eta)\right)^{n-y} = 
+\binom{n}{y} \left(\frac{e^{\eta}}{1 + e^{\eta}}\right)^{y}
+\left(\frac{1}{1 + e^{\eta}}\right)^{n - y}$$
+
+For logistic regression, ths is the likelihood **stan_glm** uses by default. 
+
+### Posterior
+
+Drawing from the posterior distribution of our intercept coefficient $\alpha$ and predictor coefficients $\beta$ is fairly straight forward:
+
+$$f\left(\alpha,\boldsymbol{\beta} | \mathbf{y},\mathbf{X}\right) \propto
+  f\left(\alpha\right) \times \prod_{k=1}^K f\left(\beta_k\right) \times
+  \prod_{i=1}^N {
+  g^{-1}\left(\eta_i\right)^{y_i} 
+  \left(1 - g^{-1}\left(\eta_i\right)\right)^{n_i-y_i}}.$$
+
+**stan_glm** effectively mirrors the generalized linear model function **glm** in R, with extra parameters to specific our aforementioned priors.  **stan_glm** draws from the posterior distribution for each coefficient estimate using Markov Chain Monte Carlo (MCMC) simulation. We'll also set a seed for reproducibility, and add a random effect to account for individual variance. The input formula is **orientation ~ amygdala + acc**.
 
 ```{r}
 t_prior <- student_t(df = 7, location = 0, scale = 2.5)
