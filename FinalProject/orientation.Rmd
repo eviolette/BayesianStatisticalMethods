@@ -47,6 +47,15 @@ orientation.df %>%
 
 There are `r nrow(orientation.df[orientation.df$orientation == "conservative",])` young adults who identify as "conservative"  and `r nrow(orientation.df[orientation.df$orientation != "conservative",])` young adults who identify as "liberal" according to our specification.
 
+```{r}
+orientation.df %>% 
+  ggplot() +
+  geom_jitter(aes(y = amygdala, x = acc)) +
+  theme(legend.position = "none") +
+  labs(title = "Amygdala Volume (au) v. Political Orientation", y = "Amygdala volume (au)")
+```
+
+There doesn't appear to be any correlation between ACC and amygdala volume.
 
 ```{r}
 orientation.df %>% 
